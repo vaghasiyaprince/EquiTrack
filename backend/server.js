@@ -18,9 +18,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.use('/api/auth', require('./routes/authRoutes'));
+
 const PORT = process.env.PORT || 5000;
 
-const startServer = (port = PORT) => {
+const startServer = async(port = PORT) => {
   const server = app.listen(port, () => {
     console.log(`Server running on port http://localhost:${port}`);
   });
@@ -29,8 +31,7 @@ const startServer = (port = PORT) => {
 };
 
 if (require.main === module) {
-  connectDB();
-  startServer();
+  connectDB().then(()=>{startServer()});
 }
 
 module.exports = { app, startServer };
