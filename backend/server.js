@@ -3,7 +3,8 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const connectDB = require('./config/db');
 
-dotenv.config();
+const path = require('path');
+dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 const app = express();
 
