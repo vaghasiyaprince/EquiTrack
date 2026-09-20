@@ -23,7 +23,6 @@ const registerUser = async (req, res) => {
       _id: user._id,
       name: user.name,
       email: user.email,
-      watchlist: user.watchlist,
       token: generateToken(user._id),
     });
   } catch (error) {
@@ -52,7 +51,6 @@ const loginUser = async (req, res) => {
       _id: user._id,
       name: user.name,
       email: user.email,
-      watchlist: user.watchlist,
       token: generateToken(user._id),
     });
   } catch (error) {
@@ -64,8 +62,8 @@ const loginUser = async (req, res) => {
 // @route   GET /api/auth/profile
 // @access  Private
 const getProfile = async (req, res) => {
-  const { _id, name, email, watchlist, createdAt } = req.user;
-  return res.json({ _id, name, email, watchlist, createdAt });
+  const { _id, name, email, createdAt } = req.user;
+  return res.json({ _id, name, email, createdAt });
 };
 
 // @desc    Update user profile
@@ -95,7 +93,6 @@ const updateProfile = async (req, res) => {
       _id: updated._id,
       name: updated.name,
       email: updated.email,
-      watchlist: updated.watchlist,
     });
   } catch (error) {
     return res.status(500).json({ message: error.message });

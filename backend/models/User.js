@@ -22,10 +22,6 @@ const userSchema = new mongoose.Schema(
       minlength: [6, 'Password must be at least 6 characters'],
       select: false,
     },
-    watchlist: {
-      type: [String], // REQ-10
-      default: [],
-    },
   },
   { timestamps: true }
 );
