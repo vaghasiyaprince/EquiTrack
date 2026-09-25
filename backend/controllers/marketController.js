@@ -1,6 +1,9 @@
 const axios = require('axios');
+const https = require('https');
 const { getAngelSession } = require('../utils/angelClient');
 const { findToken } = require('../utils/instrumentMaster');
+
+const agent = new https.Agent({ keepAlive: false });
 
 // @desc    Get live quote for a single stock
 // @route   GET /api/market/quote/:symbol
@@ -24,6 +27,7 @@ const getQuote = async (req, res) => {
         exchangeTokens: { [exchange]: [token] },
       },
       {
+        httpsAgent: agent,
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
