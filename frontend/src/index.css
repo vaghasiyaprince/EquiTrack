@@ -1,0 +1,227 @@
+/* ==========================================================================
+   EquiTrack — Apple Stocks Design System
+   iOS / macOS Design Tokens from apple.design.md & Reference Screenshots
+   ========================================================================== */
+
+:root {
+  /* Light Mode */
+  --apple-canvas: #ffffff;
+  --apple-parchment: #f2f2f7;
+  --apple-card-bg: #ffffff;
+  --apple-surface-tile: #ffffff;
+  --apple-surface-secondary: #f2f2f7;
+  --apple-surface-selected: #e5e5ea;
+  --apple-surface-hover: rgba(0, 0, 0, 0.04);
+  --apple-border: rgba(60, 60, 67, 0.18);
+  --apple-hairline: rgba(60, 60, 67, 0.12);
+
+  /* Typography */
+  --apple-ink: #000000;
+  --apple-ink-secondary: #8e8e93;
+  --apple-ink-tertiary: #c7c7cc;
+
+  /* Actions & Highlights */
+  --apple-action-blue: #007aff;
+  --apple-action-blue-hover: #0062cc;
+  --apple-focus-ring: rgba(0, 122, 255, 0.35);
+
+  /* Market Gains / Losses (Apple Stocks Vibrant Green & Red) */
+  --apple-green: #34c759;
+  --apple-green-bg: rgba(52, 199, 89, 0.14);
+  --apple-green-pill: #34c759;
+  --apple-red: #ff3b30;
+  --apple-red-bg: rgba(255, 59, 48, 0.14);
+  --apple-red-pill: #ff3b30;
+  --apple-pill-text: #ffffff;
+
+  /* Fonts */
+  --font-sf: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Elevation */
+  --apple-shadow-dropdown: 0 10px 30px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
+  --apple-shadow-modal: 0 24px 48px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.06);
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 9999px;
+
+  /* Dimensions */
+  --sidebar-width: 360px;
+}
+
+[data-theme="dark"] {
+  /* Dark Mode — 100% True Apple Stocks (iOS / macOS) */
+  --apple-canvas: #000000;
+  --apple-parchment: #000000;
+  --apple-card-bg: #1c1c1e;
+  --apple-surface-tile: #1c1c1e;
+  --apple-surface-secondary: #1c1c1e;
+  --apple-surface-selected: #2c2c2e;
+  --apple-surface-hover: rgba(255, 255, 255, 0.08);
+  --apple-border: rgba(255, 255, 255, 0.15);
+  --apple-hairline: rgba(255, 255, 255, 0.08);
+
+  --apple-ink: #ffffff;
+  --apple-ink-secondary: #8e8e93;
+  --apple-ink-tertiary: #48484a;
+
+  --apple-action-blue: #0a84ff;
+  --apple-action-blue-hover: #409cff;
+  --apple-focus-ring: rgba(10, 132, 255, 0.4);
+
+  --apple-green: #30d158;
+  --apple-green-bg: rgba(48, 209, 88, 0.18);
+  --apple-green-pill: #30d158;
+  --apple-red: #ff453a;
+  --apple-red-bg: rgba(255, 69, 58, 0.18);
+  --apple-red-pill: #ff453a;
+  --apple-pill-text: #ffffff;
+
+  --apple-shadow-dropdown: 0 16px 36px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  --apple-shadow-modal: 0 28px 60px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+/* ==========================================================================
+   Reset & Base Typography
+   ========================================================================== */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--apple-canvas);
+  color: var(--apple-ink);
+  font-family: var(--font-sf);
+  font-size: 15px;
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Custom Thin Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--apple-ink-tertiary);
+  border-radius: var(--radius-pill);
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+  transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease, opacity 0.15s ease;
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+input {
+  font-family: inherit;
+  color: inherit;
+}
+
+/* ==========================================================================
+   Apple Spring Popup / Modal Animations
+   ========================================================================== */
+
+@keyframes backdropFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes backdropFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes modalSpringIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes modalSpringOut {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.94) translateY(12px);
+  }
+}
+
+.apple-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+}
+
+.apple-backdrop-enter {
+  animation: backdropFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.apple-backdrop-exit {
+  animation: backdropFadeOut 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.apple-modal-enter {
+  animation: modalSpringIn 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.1) forwards;
+}
+
+.apple-modal-exit {
+  animation: modalSpringOut 0.18s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.animate-fade-in {
+  animation: modalSpringIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Mobile Responsiveness Rules */
+@media (max-width: 768px) {
+  :root {
+    --sidebar-width: 100%;
+  }
+
+  .desktop-only {
+    display: none !important;
+  }
+}
