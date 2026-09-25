@@ -20,6 +20,7 @@ const registerUser = async (req, res) => {
     const user = await User.create({ name, email, password });
 
     return res.status(201).json({
+      message: 'Registration successful',
       _id: user._id,
       name: user.name,
       email: user.email,
@@ -48,6 +49,7 @@ const loginUser = async (req, res) => {
     }
 
     return res.json({
+      message: 'Login successful',
       _id: user._id,
       name: user.name,
       email: user.email,
@@ -90,6 +92,7 @@ const updateProfile = async (req, res) => {
     const updated = await user.save();
 
     return res.json({
+      message: 'Profile updated successfully',
       _id: updated._id,
       name: updated.name,
       email: updated.email,

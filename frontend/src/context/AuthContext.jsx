@@ -1,86 +1,110 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { apiFetch } from '../services/api';
+import {
+  getStoredToken,
+  setStoredToken,
+  loginApi,
+  registerApi,
+  getProfileApi,
+  updateProfileApi,
+} from '../services/api';
 
-const AuthContext = createContext(null);
+const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
+  const [token, setToken] = useState(getStoredToken());
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(() => localStorage.getItem('equitrack_token') || '');
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
 
-  // Fetch current user profile on initial mount if token exists
+  // Load user profile if token is present
   useEffect(() => {
-    const initAuth = async () => {
-      if (!token) {
+    const fetchUser = async () => {
+      const savedToken = getStoredToken();
+      if (!savedToken) {
+        setUser(null);
         setLoading(false);
         return;
       }
 
       try {
-        const userData = await apiFetch('/auth/profile');
-        setUser(userData);
+        const profile = await getProfileApi();
+        setUser(profile);
       } catch (err) {
-        console.warn('Session expired or invalid token:', err.message);
-        logout();
+        console.warn('Failed to load user profile with token:', err.message);
+        // If token invalid, clear
+        setStoredToken(null);
+        setToken(null);
+        setUser(null);
       } finally {
         setLoading(false);
       }
     };
 
-    initAuth();
+    fetchUser();
   }, [token]);
 
   const login = async (email, password) => {
-    const data = await apiFetch('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    });
-
-    if (data.token) {
-      localStorage.setItem('equitrack_token', data.token);
-      setToken(data.token);
-      setUser(data);
+    setAuthError(null);
+    try {
+      const data = await loginApi(email, password);
+      if (data.token) {
+        setStoredToken(data.token);
+        setToken(data.token);
+        setUser({
+          _id: data._id,
+          name: data.name,
+          email: data.email,
+        });
+      }
+      return data;
+    } catch (err) {
+      setAuthError(err.message || 'Login failed');
+      throw err;
     }
-    return data;
   };
 
   const register = async (name, email, password) => {
-    const data = await apiFetch('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ name, email, password }),
-    });
-
-    if (data.token) {
-      localStorage.setItem('equitrack_token', data.token);
-      setToken(data.token);
-      setUser(data);
+    setAuthError(null);
+    try {
+      const data = await registerApi(name, email, password);
+      return data;
+    } catch (err) {
+      setAuthError(err.message || 'Registration failed');
+      throw err;
     }
-    return data;
   };
 
-  const updateProfile = async (name, email) => {
-    const data = await apiFetch('/auth/profile', {
-      method: 'PUT',
-      body: JSON.stringify({ name, email }),
-    });
-
-    setUser((prev) => ({ ...prev, ...data }));
-    return data;
+  const updateProfile = async (name, password) => {
+    setAuthError(null);
+    try {
+      const data = await updateProfileApi(name, password);
+      setUser((prev) => ({
+        ...prev,
+        name: data.name || (name || prev?.name),
+      }));
+      return data;
+    } catch (err) {
+      setAuthError(err.message || 'Failed to update profile');
+      throw err;
+    }
   };
 
   const logout = () => {
-    localStorage.removeItem('equitrack_token');
-    setToken('');
+    setStoredToken(null);
+    setToken(null);
     setUser(null);
+    setAuthError(null);
   };
 
   return (
     <AuthContext.Provider
       value={{
-        user,
         token,
+        user,
+        isAuthenticated: !!token && !!user,
         loading,
-        isAuthenticated: !!user,
+        authError,
+        setAuthError,
         login,
         register,
         updateProfile,

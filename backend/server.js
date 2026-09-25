@@ -18,6 +18,10 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/users', require('./routes/authRoutes')); // Lab 03: /users/register, /users/login, /users/profile
+app.use('/api/watchlist', require('./routes/watchlistRoutes')); // Lab 03: /watchlist
+app.use('/api/dashboard', require('./routes/dashboardRoutes')); // Lab 03: /dashboard
+app.use('/api/stocks', require('./routes/stockRoutes')); // Lab 03: /stocks/search, /stocks/:symbol
 app.use('/api/market', require('./routes/marketRoutes'));
 
 const PORT = process.env.PORT || 5000;

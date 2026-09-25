@@ -1,223 +1,202 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { X, Check } from 'lucide-react';
+import { X, CheckCircle2, AlertCircle } from 'lucide-react';
 
-export const ProfileModal = ({ isOpen, onClose }) => {
-  const [isRendered, setIsRendered] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
+export const ProfileModal = ({ isOpen, onClose, onNotification }) => {
+  const { user, updateProfile } = useAuth();
 
-  const { user, updateProfile, logout } = useAuth();
-  const [name, setName] = useState(user?.name || '');
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState('');
+  const [name, setName] = useState('');
+  const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   useEffect(() => {
-    if (isOpen && user) {
-      setIsRendered(true);
-      setIsClosing(false);
+    if (user) {
       setName(user.name || '');
-    } else if (isRendered) {
-      setIsClosing(true);
-      const timer = setTimeout(() => {
-        setIsRendered(false);
-        setIsClosing(false);
-      }, 180);
-      return () => clearTimeout(timer);
+      setPassword('');
+      setSuccessMessage(null);
+      setErrorMessage(null);
     }
-  }, [isOpen, user]);
+  }, [user, isOpen]);
 
-  if (!isRendered || !user) return null;
+  if (!isOpen) return null;
 
-  const handleDismiss = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      onClose();
-    }, 180);
-  };
-
-  const handleUpdate = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
-    setSuccess(false);
+    setSuccessMessage(null);
+    setErrorMessage(null);
+    setSubmitting(true);
 
     try {
-      await updateProfile(name, user.email);
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      if (!name.trim()) throw new Error('Name cannot be empty');
+      const res = await updateProfile(name.trim(), password || undefined);
+      const msg = res.message || 'Profile updated successfully';
+      setSuccessMessage(msg);
+      if (onNotification) onNotification({ type: 'success', message: msg });
+      setPassword('');
     } catch (err) {
-      setError(err.message || 'Failed to update profile');
+      setErrorMessage(err.message || 'Failed to update profile');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
   return (
     <div
-      className={`apple-backdrop ${isClosing ? 'apple-backdrop-exit' : 'apple-backdrop-enter'}`}
-      onClick={handleDismiss}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backdropFilter: 'blur(20px)',
+        padding: '24px',
+      }}
+      onClick={onClose}
     >
       <div
-        className={isClosing ? 'apple-modal-exit' : 'apple-modal-enter'}
-        onClick={(e) => e.stopPropagation()}
+        className="apple-card apple-modal-in"
         style={{
           width: '100%',
-          maxWidth: '380px',
-          backgroundColor: 'var(--apple-card-bg)',
-          borderRadius: 'var(--radius-xl)',
-          padding: '28px',
-          boxShadow: 'var(--apple-shadow-modal)',
-          border: '1px solid var(--apple-border)',
-          position: 'relative',
+          maxWidth: '460px',
+          padding: '32px',
+          boxShadow: 'var(--shadow-modal)',
         }}
+        onClick={(e) => e.stopPropagation()}
       >
-        <button
-          onClick={handleDismiss}
-          style={{
-            position: 'absolute',
-            top: '18px',
-            right: '18px',
-            color: 'var(--apple-ink-secondary)',
-            width: '28px',
-            height: '28px',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'var(--apple-surface-secondary)',
-          }}
-        >
-          <X size={16} />
-        </button>
-
-        <h2
-          style={{
-            fontSize: '22px',
-            fontWeight: 700,
-            color: 'var(--apple-ink)',
-            letterSpacing: '-0.3px',
-            marginBottom: '4px',
-          }}
-        >
-          User Profile
-        </h2>
-        <p style={{ fontSize: '13px', color: 'var(--apple-ink-secondary)', marginBottom: '20px' }}>
-          Manage your EquiTrack account details
-        </p>
-
-        {success && (
-          <div
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+          <div>
+            <h2 style={{ fontSize: '22px', fontWeight: 600, color: 'var(--apple-ink)' }}>
+              User Profile
+            </h2>
+            <p style={{ fontSize: '13px', color: 'var(--apple-body-muted)', marginTop: '2px' }}>
+              Manage your credentials and preferences
+            </p>
+          </div>
+          <button
+            onClick={onClose}
             style={{
-              padding: '10px 14px',
-              backgroundColor: 'var(--apple-green-bg)',
-              color: 'var(--apple-green)',
-              borderRadius: 'var(--radius-md)',
-              fontSize: '13px',
-              fontWeight: 500,
-              marginBottom: '16px',
+              background: 'var(--apple-surface-pearl)',
+              border: 'none',
+              borderRadius: 'var(--rounded-pill)',
+              width: '28px',
+              height: '28px',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              justifyContent: 'center',
+              color: 'var(--apple-body-muted)',
+              cursor: 'pointer',
             }}
           >
-            <Check size={16} />
-            <span>Profile updated successfully</span>
-          </div>
-        )}
+            <X size={16} />
+          </button>
+        </div>
 
-        {error && (
+        {/* Alerts */}
+        {successMessage && (
           <div
             style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
               padding: '10px 14px',
-              backgroundColor: 'var(--apple-red-bg)',
-              color: 'var(--apple-red)',
-              borderRadius: 'var(--radius-md)',
+              borderRadius: 'var(--rounded-md)',
+              background: 'var(--apple-green-bg)',
+              color: 'var(--apple-green)',
               fontSize: '13px',
-              fontWeight: 500,
               marginBottom: '16px',
             }}
           >
-            {error}
+            <CheckCircle2 size={16} />
+            <span>{successMessage}</span>
           </div>
         )}
 
-        <form onSubmit={handleUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        {errorMessage && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 14px',
+              borderRadius: 'var(--rounded-md)',
+              background: 'var(--apple-red-bg)',
+              color: 'var(--apple-red)',
+              fontSize: '13px',
+              marginBottom: '16px',
+            }}
+          >
+            <AlertCircle size={16} />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
+        {/* Account Info (R.1.3) */}
+        <div
+          style={{
+            background: 'var(--apple-surface-pearl)',
+            borderRadius: 'var(--rounded-md)',
+            padding: '14px 16px',
+            marginBottom: '20px',
+            border: '1px solid var(--apple-hairline)',
+          }}
+        >
+          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--apple-body-muted)', marginBottom: '4px' }}>
+            Registered Email
+          </div>
+          <div style={{ fontSize: '15px', color: 'var(--apple-ink)', fontWeight: 500 }}>
+            {user?.email}
+          </div>
+        </div>
+
+        {/* Form (R.1.4) */}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--apple-ink-secondary)', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--apple-body-muted)', display: 'block', marginBottom: '6px' }}>
               Full Name
             </label>
             <input
               type="text"
+              className="apple-input"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                borderRadius: 'var(--radius-md)',
-                backgroundColor: 'var(--apple-surface-secondary)',
-                border: '1px solid var(--apple-hairline)',
-                fontSize: '14px',
-              }}
+              required
             />
           </div>
 
           <div>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--apple-ink-secondary)', display: 'block', marginBottom: '4px' }}>
-              Email Address
+            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--apple-body-muted)', display: 'block', marginBottom: '6px' }}>
+              Update Password (optional)
             </label>
             <input
-              type="text"
-              disabled
-              value={user.email}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                borderRadius: 'var(--radius-md)',
-                backgroundColor: 'var(--apple-surface-secondary)',
-                border: '1px solid var(--apple-hairline)',
-                fontSize: '14px',
-                opacity: 0.6,
-                cursor: 'not-allowed',
-              }}
+              type="password"
+              className="apple-input"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Leave blank to keep unchanged"
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              marginTop: '10px',
-              padding: '10px 16px',
-              borderRadius: 'var(--radius-pill)',
-              backgroundColor: 'var(--apple-action-blue)',
-              color: '#ffffff',
-              fontSize: '14px',
-              fontWeight: 600,
-            }}
-          >
-            {loading ? 'Saving...' : 'Save Changes'}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              logout();
-              handleDismiss();
-            }}
-            style={{
-              padding: '10px 16px',
-              borderRadius: 'var(--radius-pill)',
-              backgroundColor: 'transparent',
-              border: '1px solid var(--apple-red)',
-              color: 'var(--apple-red)',
-              fontSize: '14px',
-              fontWeight: 600,
-              marginTop: '4px',
-            }}
-          >
-            Sign Out
-          </button>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
+            <button
+              type="button"
+              onClick={onClose}
+              className="apple-btn-pill apple-btn-pill-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="apple-btn-pill"
+              disabled={submitting}
+            >
+              {submitting ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
         </form>
       </div>
     </div>
