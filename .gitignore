@@ -34,3 +34,10 @@ Thumbs.db
 
 # Coverage
 coverage/
+
+# Docs, collections, and image assets
+AT - Project - Docs/
+apple.design.md
+EquiTrack.postman_collection.json
+Sample images/
+images/
