@@ -1,33 +1,60 @@
 const axios = require('axios');
+const https = require('https');
+const { getAngelSession } = require('./angelClient');
 
-let instrumentCache = null;
-let cacheTime = null;
-const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // refresh once a day
+const agent = new https.Agent({ keepAlive: false });
 
-const SCRIP_MASTER_URL =
-  'https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json';
-
-const loadInstruments = async () => {
-  const now = Date.now();
-  if (instrumentCache && cacheTime && now - cacheTime < CACHE_DURATION_MS) {
-    return instrumentCache;
-  }
-
-  console.log('Downloading Angel One instrument master (this may take a few seconds)...');
-  const { data } = await axios.get(SCRIP_MASTER_URL);
-  instrumentCache = data;
-  cacheTime = now;
-  console.log(`Loaded ${data.length} instruments`);
-  return instrumentCache;
-};
+// Simple in-memory cache so we don't re-search the same symbol repeatedly
+const tokenCache = new Map();
 
 // Find the token for a given trading symbol + exchange (e.g. "RELIANCE-EQ", "NSE")
 const findToken = async (tradingsymbol, exchange = 'NSE') => {
-  const instruments = await loadInstruments();
-  const match = instruments.find(
-    (i) => i.symbol === tradingsymbol && i.exch_seg === exchange
+  const cacheKey = `${exchange}:${tradingsymbol}`;
+  if (tokenCache.has(cacheKey)) {
+    return tokenCache.get(cacheKey);
+  }
+
+  const smartApi = await getAngelSession();
+
+  // Angel One's search API expects the bare name, not the "-EQ" suffix
+  const searchName = tradingsymbol.replace(/-EQ$/i, '');
+
+  const response = await axios.post(
+    'https://apiconnect.angelbroking.com/rest/secure/angelbroking/order/v1/searchScrip',
+    {
+      exchange,
+      searchscrip: searchName,
+    },
+    {
+      httpsAgent: agent,
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'X-UserType': 'USER',
+        'X-SourceID': 'WEB',
+        'X-ClientLocalIP': '127.0.0.1',
+        'X-ClientPublicIP': '127.0.0.1',
+        'X-MACAddress': '00:00:00:00:00:00',
+        'X-PrivateKey': process.env.ANGEL_API_KEY,
+        Authorization: `Bearer ${smartApi.access_token}`,
+      },
+    }
   );
-  return match ? match.token : null;
+
+  const results = response.data?.data;
+  if (!results || results.length === 0) {
+    return null;
+  }
+
+  // Prefer an exact match on the requested trading symbol; otherwise take the first result
+  const exactMatch = results.find(
+    (r) => r.tradingsymbol === tradingsymbol && r.exchange === exchange
+  );
+  const chosen = exactMatch || results[0];
+
+  const token = chosen.symboltoken;
+  tokenCache.set(cacheKey, token);
+  return token;
 };
 
-module.exports = { loadInstruments, findToken };
+module.exports = { findToken };

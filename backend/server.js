@@ -3,6 +3,8 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const connectDB = require('./config/db');
 
+// server.js - at the very top, before other requires
+
 dotenv.config();
 const app = express();
 
