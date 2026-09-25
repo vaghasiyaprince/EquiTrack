@@ -354,6 +354,53 @@ h3 {
   transition: transform var(--transition-fast), opacity var(--transition-fast);
 }
 
+/* Apple Navigation Back Button ("All Equities") */
+.apple-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-sf-text);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.16px;
+  padding: 8px 16px;
+  border-radius: var(--rounded-pill);
+  background-color: var(--apple-surface-card);
+  color: var(--apple-ink);
+  border: 1px solid var(--apple-hairline);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  user-select: none;
+  transition: transform var(--transition-fast), background-color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast), color var(--transition-fast);
+}
+
+.apple-back-btn:hover {
+  background-color: var(--apple-surface-pearl);
+  border-color: rgba(0, 102, 204, 0.35);
+  color: var(--apple-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+}
+
+.apple-back-btn:active {
+  transform: scale(0.95) translateY(0);
+  box-shadow: none;
+}
+
+[data-theme="dark"] .apple-back-btn {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #f5f5f7;
+  box-shadow: none;
+}
+
+[data-theme="dark"] .apple-back-btn:hover {
+  background-color: rgba(255, 255, 255, 0.14);
+  border-color: rgba(41, 151, 255, 0.45);
+  color: var(--apple-primary);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
 /* ================== APPLE ANIMATIONS & TRANSITIONS ================== */
 
 @keyframes appleFadeIn {
@@ -371,10 +418,30 @@ h3 {
   animation: appleFadeIn 0.28s var(--apple-spring) forwards;
 }
 
+/* Backdrop Fade In / Out */
+@keyframes appleBackdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes appleBackdropOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.apple-backdrop-in {
+  animation: appleBackdropIn 0.22s var(--apple-ease) forwards;
+}
+
+.apple-backdrop-out {
+  animation: appleBackdropOut 0.2s var(--apple-ease) forwards;
+}
+
+/* Modal Open & Close */
 @keyframes appleModalIn {
   from {
     opacity: 0;
-    transform: scale(0.95) translateY(12px);
+    transform: scale(0.93) translateY(16px);
   }
   to {
     opacity: 1;
@@ -382,8 +449,86 @@ h3 {
   }
 }
 
+@keyframes appleModalOut {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.93) translateY(16px);
+  }
+}
+
 .apple-modal-in {
-  animation: appleModalIn 0.25s var(--apple-spring) forwards;
+  animation: appleModalIn 0.26s var(--apple-spring) forwards;
+}
+
+.apple-modal-out {
+  animation: appleModalOut 0.2s var(--apple-ease) forwards;
+}
+
+/* Toast Open & Close */
+@keyframes appleToastIn {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes appleToastOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(24px) scale(0.92);
+  }
+}
+
+.apple-toast-in {
+  animation: appleToastIn 0.26s var(--apple-spring) forwards;
+}
+
+.apple-toast-out {
+  animation: appleToastOut 0.2s var(--apple-ease) forwards;
+}
+
+/* Auth Card Smooth Spring Entrance */
+@keyframes appleAuthCardIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.apple-auth-card {
+  animation: appleAuthCardIn 0.32s var(--apple-spring) forwards;
+}
+
+/* Auth Tab Fade Transition */
+@keyframes appleTabSwitch {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.apple-tab-switch {
+  animation: appleTabSwitch 0.2s var(--apple-ease) forwards;
 }
 
 @keyframes applePulse {

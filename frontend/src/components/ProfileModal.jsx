@@ -11,16 +11,40 @@ export const ProfileModal = ({ isOpen, onClose, onNotification }) => {
   const [successMessage, setSuccessMessage] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
 
-  useEffect(() => {
-    if (user) {
-      setName(user.name || '');
-      setPassword('');
-      setSuccessMessage(null);
-      setErrorMessage(null);
-    }
-  }, [user, isOpen]);
+  // State for handling opening & closing animations
+  const [shouldRender, setShouldRender] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (isOpen) {
+      setShouldRender(true);
+      setIsClosing(false);
+      if (user) {
+        setName(user.name || '');
+        setPassword('');
+        setSuccessMessage(null);
+        setErrorMessage(null);
+      }
+    } else if (shouldRender) {
+      setIsClosing(true);
+      const timer = setTimeout(() => {
+        setShouldRender(false);
+        setIsClosing(false);
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, user]);
+
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      onClose();
+      setIsClosing(false);
+      setShouldRender(false);
+    }, 200);
+  };
+
+  if (!shouldRender) return null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -44,6 +68,7 @@ export const ProfileModal = ({ isOpen, onClose, onNotification }) => {
 
   return (
     <div
+      className={isClosing ? 'apple-backdrop-out' : 'apple-backdrop-in'}
       style={{
         position: 'fixed',
         inset: 0,
@@ -51,14 +76,15 @@ export const ProfileModal = ({ isOpen, onClose, onNotification }) => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(0, 0, 0, 0.45)',
         backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
         padding: '24px',
       }}
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div
-        className="apple-card apple-modal-in"
+        className={`apple-card ${isClosing ? 'apple-modal-out' : 'apple-modal-in'}`}
         style={{
           width: '100%',
           maxWidth: '460px',
@@ -78,19 +104,10 @@ export const ProfileModal = ({ isOpen, onClose, onNotification }) => {
             </p>
           </div>
           <button
-            onClick={onClose}
-            style={{
-              background: 'var(--apple-surface-pearl)',
-              border: 'none',
-              borderRadius: 'var(--rounded-pill)',
-              width: '28px',
-              height: '28px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--apple-body-muted)',
-              cursor: 'pointer',
-            }}
+            onClick={handleClose}
+            className="apple-btn-circular"
+            style={{ width: '32px', height: '32px' }}
+            title="Close"
           >
             <X size={16} />
           </button>
@@ -99,6 +116,7 @@ export const ProfileModal = ({ isOpen, onClose, onNotification }) => {
         {/* Alerts */}
         {successMessage && (
           <div
+            className="apple-tab-switch"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -118,6 +136,7 @@ export const ProfileModal = ({ isOpen, onClose, onNotification }) => {
 
         {errorMessage && (
           <div
+            className="apple-tab-switch"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -184,7 +203,7 @@ export const ProfileModal = ({ isOpen, onClose, onNotification }) => {
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="apple-btn-pill apple-btn-pill-secondary"
             >
               Cancel

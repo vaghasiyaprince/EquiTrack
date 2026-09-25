@@ -1,14 +1,40 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 
 export const NotificationToast = ({ notification, onClose }) => {
-  if (!notification) return null;
+  const [isClosing, setIsClosing] = useState(false);
+  const [activeNotification, setActiveNotification] = useState(notification);
 
-  const isSuccess = notification.type === 'success';
+  useEffect(() => {
+    if (notification) {
+      setActiveNotification(notification);
+      setIsClosing(false);
+    } else if (activeNotification && !isClosing) {
+      setIsClosing(true);
+      const timer = setTimeout(() => {
+        setActiveNotification(null);
+        setIsClosing(false);
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
+
+  const handleDismiss = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      onClose();
+      setActiveNotification(null);
+      setIsClosing(false);
+    }, 200);
+  };
+
+  if (!activeNotification) return null;
+
+  const isSuccess = activeNotification.type === 'success';
 
   return (
     <div
-      className="apple-modal-in"
+      className={isClosing ? 'apple-toast-out' : 'apple-toast-in'}
       style={{
         position: 'fixed',
         bottom: '28px',
@@ -35,9 +61,9 @@ export const NotificationToast = ({ notification, onClose }) => {
       ) : (
         <AlertCircle size={18} color="#ff3b30" />
       )}
-      <span style={{ flex: 1 }}>{notification.message}</span>
+      <span style={{ flex: 1 }}>{activeNotification.message}</span>
       <button
-        onClick={onClose}
+        onClick={handleDismiss}
         style={{
           background: 'transparent',
           border: 'none',
@@ -45,10 +71,15 @@ export const NotificationToast = ({ notification, onClose }) => {
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
-          padding: '2px',
+          padding: '4px',
+          borderRadius: 'var(--rounded-pill)',
+          transition: 'color var(--transition-fast), transform var(--transition-fast)',
         }}
+        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--apple-ink)')}
+        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--apple-body-muted)')}
+        title="Dismiss"
       >
-        <X size={14} />
+        <X size={15} />
       </button>
     </div>
   );

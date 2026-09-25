@@ -7,6 +7,7 @@ import {
 } from '../services/api';
 import {
   ArrowLeft,
+  ChevronLeft,
   Bookmark,
   BookmarkCheck,
   Building2,
@@ -103,8 +104,8 @@ export const CompanyDetailsView = ({
         <p style={{ color: 'var(--apple-red)', marginBottom: '16px', fontSize: '15px' }}>
           {error || 'Unable to retrieve company information.'}
         </p>
-        <button onClick={onBack} className="apple-btn-pill apple-btn-pill-secondary">
-          <ArrowLeft size={14} />
+        <button onClick={onBack} className="apple-back-btn">
+          <ChevronLeft size={16} color="var(--apple-primary)" strokeWidth={2.5} />
           <span>Back to Market</span>
         </button>
       </div>
@@ -117,8 +118,8 @@ export const CompanyDetailsView = ({
     <div className="apple-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Action Row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <button onClick={onBack} className="apple-link">
-          <ArrowLeft size={16} />
+        <button onClick={onBack} className="apple-back-btn" title="Back to All Equities">
+          <ChevronLeft size={16} color="var(--apple-primary)" strokeWidth={2.5} />
           <span>All Equities</span>
         </button>
 

@@ -62,7 +62,7 @@ export const AuthPage = ({ onSuccess }) => {
       }}
     >
       <div
-        className="apple-card"
+        className="apple-card apple-auth-card"
         style={{
           width: '100%',
           maxWidth: '420px',
@@ -101,7 +101,7 @@ export const AuthPage = ({ onSuccess }) => {
             display: 'flex',
             background: 'var(--apple-surface-pearl)',
             borderRadius: 'var(--rounded-pill)',
-            padding: '3px',
+            padding: '4px',
             marginBottom: '24px',
             border: '1px solid var(--apple-hairline)',
           }}
@@ -115,7 +115,7 @@ export const AuthPage = ({ onSuccess }) => {
             }}
             style={{
               flex: 1,
-              padding: '6px',
+              padding: '7px',
               borderRadius: 'var(--rounded-pill)',
               border: 'none',
               background: !isRegister ? 'var(--apple-surface-card)' : 'transparent',
@@ -124,7 +124,8 @@ export const AuthPage = ({ onSuccess }) => {
               fontSize: '13px',
               cursor: 'pointer',
               boxShadow: !isRegister ? 'var(--shadow-apple)' : 'none',
-              transition: 'all var(--transition-apple)',
+              transition: 'all var(--transition-fast)',
+              transform: !isRegister ? 'scale(1.01)' : 'scale(0.99)',
             }}
           >
             Sign In
@@ -138,7 +139,7 @@ export const AuthPage = ({ onSuccess }) => {
             }}
             style={{
               flex: 1,
-              padding: '6px',
+              padding: '7px',
               borderRadius: 'var(--rounded-pill)',
               border: 'none',
               background: isRegister ? 'var(--apple-surface-card)' : 'transparent',
@@ -147,7 +148,8 @@ export const AuthPage = ({ onSuccess }) => {
               fontSize: '13px',
               cursor: 'pointer',
               boxShadow: isRegister ? 'var(--shadow-apple)' : 'none',
-              transition: 'all var(--transition-apple)',
+              transition: 'all var(--transition-fast)',
+              transform: isRegister ? 'scale(1.01)' : 'scale(0.99)',
             }}
           >
             Register
@@ -157,6 +159,7 @@ export const AuthPage = ({ onSuccess }) => {
         {/* Feedback alerts */}
         {message && (
           <div
+            className="apple-tab-switch"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -176,6 +179,7 @@ export const AuthPage = ({ onSuccess }) => {
 
         {error && (
           <div
+            className="apple-tab-switch"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -194,7 +198,12 @@ export const AuthPage = ({ onSuccess }) => {
         )}
 
         {/* Form */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <form
+          key={isRegister ? 'register' : 'login'}
+          className="apple-tab-switch"
+          onSubmit={handleSubmit}
+          style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+        >
           {isRegister && (
             <div>
               <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--apple-body-muted)', display: 'block', marginBottom: '6px' }}>
