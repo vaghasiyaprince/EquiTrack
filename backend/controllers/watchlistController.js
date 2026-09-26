@@ -1,39 +1,18 @@
 const Watchlist = require('../models/Watchlist');
-const { STOCKS } = require('./stockController');
 
-// @desc    Get user's watchlist
+// @desc    Get all watchlist items for the logged-in user
 // @route   GET /api/watchlist
 // @access  Private
 const getWatchlist = async (req, res) => {
   try {
-    const list = await Watchlist.find({ userId: req.user._id }).sort({ addedAt: -1 });
-
-    const formatted = list.map((item) => {
-      const stockInfo = STOCKS.find(
-        (s) => s.symbol.toUpperCase() === item.symbol.toUpperCase()
-      );
-
-      return {
-        _id: item._id,
-        symbol: item.symbol,
-        companyName: item.companyName || stockInfo?.name || item.symbol,
-        exchange: item.exchange || 'NSE',
-        addedOn: item.addedAt ? item.addedAt.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
-        currentPrice: stockInfo ? stockInfo.currentPrice : 150.0,
-        change: stockInfo ? stockInfo.change : 0,
-        changePercent: stockInfo ? stockInfo.changePercent : 0,
-        dayHigh: stockInfo ? stockInfo.dayHigh : null,
-        dayLow: stockInfo ? stockInfo.dayLow : null,
-      };
-    });
-
-    return res.json(formatted);
+    const items = await Watchlist.find({ userId: req.user._id }).sort({ addedAt: -1 });
+    return res.json(items);
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Add stock to watchlist
+// @desc    Add a stock to the watchlist
 // @route   POST /api/watchlist
 // @access  Private
 const addToWatchlist = async (req, res) => {
@@ -41,62 +20,51 @@ const addToWatchlist = async (req, res) => {
     const { symbol, companyName, exchange } = req.body;
 
     if (!symbol) {
-      return res.status(400).json({ message: 'Stock symbol is required' });
+      return res.status(400).json({ message: 'Symbol is required' });
     }
 
-    const cleanSymbol = symbol.toUpperCase().trim();
-
-    // Check if already in watchlist
     const exists = await Watchlist.findOne({
       userId: req.user._id,
-      symbol: cleanSymbol,
+      symbol: symbol.toUpperCase(),
     });
 
     if (exists) {
-      return res.status(400).json({ message: 'Stock already in watchlist' });
+      return res.status(409).json({ message: 'Stock already in watchlist' });
     }
 
-    const stockInfo = STOCKS.find((s) => s.symbol.toUpperCase() === cleanSymbol);
-
-    await Watchlist.create({
+    const item = await Watchlist.create({
       userId: req.user._id,
       userEmail: req.user.email,
-      symbol: cleanSymbol,
-      companyName: companyName || stockInfo?.name || cleanSymbol,
+      symbol,
+      companyName,
       exchange: exchange || 'NSE',
-      addedAt: new Date(),
     });
 
-    return res.status(201).json({ message: 'Stock added successfully' });
+    return res.status(201).json(item);
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Remove stock from watchlist
-// @route   DELETE /api/watchlist/:symbol
+// @desc    Remove a stock from the watchlist
+// @route   DELETE /api/watchlist/:id
 // @access  Private
 const removeFromWatchlist = async (req, res) => {
   try {
-    const cleanSymbol = (req.params.symbol || '').toUpperCase().trim();
-
-    const deleted = await Watchlist.findOneAndDelete({
-      userId: req.user._id,
-      symbol: cleanSymbol,
+    const item = await Watchlist.findOne({
+      _id: req.params.id,
+      userId: req.user._id, // ensures users can only delete their own items
     });
 
-    if (!deleted) {
-      return res.status(404).json({ message: 'Stock not found in watchlist' });
+    if (!item) {
+      return res.status(404).json({ message: 'Watchlist item not found' });
     }
 
-    return res.json({ message: 'Stock removed successfully' });
+    await item.deleteOne();
+    return res.json({ message: 'Removed from watchlist' });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
 };
 
-module.exports = {
-  getWatchlist,
-  addToWatchlist,
-  removeFromWatchlist,
-};
+module.exports = { getWatchlist, addToWatchlist, removeFromWatchlist };

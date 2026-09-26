@@ -7,11 +7,8 @@ const {
 } = require('../controllers/watchlistController');
 const { protect } = require('../middleware/authMiddleware');
 
-// All watchlist routes are private (R.3.2, R.3.3)
-router.use(protect);
-
-router.get('/', getWatchlist);
-router.post('/', addToWatchlist);
-router.delete('/:symbol', removeFromWatchlist);
+router.get('/', protect, getWatchlist);
+router.post('/', protect, addToWatchlist);
+router.delete('/:id', protect, removeFromWatchlist);
 
 module.exports = router;
