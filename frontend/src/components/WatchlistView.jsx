@@ -13,6 +13,7 @@ export const WatchlistView = ({
   onSelectStock,
   onNavigateSearch,
   onWatchlistChanged,
+  onWatchlistRemovedLocal,
   onNotification,
 }) => {
   const [removingSymbol, setRemovingSymbol] = useState(null);
@@ -26,7 +27,8 @@ export const WatchlistView = ({
       const res = await removeFromWatchlistApi(symbol);
       const msg = res.message || 'Stock removed successfully';
       if (onNotification) onNotification({ type: 'success', message: msg });
-      if (onWatchlistChanged) onWatchlistChanged();
+      if (onWatchlistRemovedLocal) onWatchlistRemovedLocal(symbol); // instant, reliable
+      if (onWatchlistChanged) onWatchlistChanged(); // background refresh for accuracy
     } catch (err) {
       if (onNotification) onNotification({ type: 'error', message: err.message || 'Failed to remove stock' });
     } finally {

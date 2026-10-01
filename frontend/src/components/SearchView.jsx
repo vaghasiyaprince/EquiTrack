@@ -12,6 +12,7 @@ export const SearchView = ({
   onSelectStock,
   watchlistSymbols = new Set(),
   onWatchlistChanged,
+  onWatchlistAddedLocal,
   onNotification,
 }) => {
   const [query, setQuery] = useState('');
@@ -52,7 +53,8 @@ export const SearchView = ({
       const res = await addToWatchlistApi(stock.symbol, stock.name);
       const msg = res.message || 'Stock added successfully';
       if (onNotification) onNotification({ type: 'success', message: msg });
-      if (onWatchlistChanged) onWatchlistChanged();
+      if (onWatchlistAddedLocal) onWatchlistAddedLocal(stock.symbol, stock.name, stock.exchange); // instant
+      if (onWatchlistChanged) onWatchlistChanged(); // background refresh for accuracy
     } catch (err) {
       if (onNotification) onNotification({ type: 'error', message: err.message || 'Could not add to watchlist' });
     } finally {

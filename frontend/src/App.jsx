@@ -14,12 +14,10 @@ import { NotificationToast } from './components/NotificationToast';
 export const App = () => {
   const { user, isAuthenticated, loading: authLoading, logout } = useAuth();
 
-  // Active view: 'dashboard' | 'search' | 'watchlist' | 'details'
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedStockSymbol, setSelectedStockSymbol] = useState(null);
   const [previousTab, setPreviousTab] = useState('dashboard');
 
-  // Apple Theme: 'dark' (macOS / iOS Stocks default) or 'light' (apple.com parchment)
   const [theme, setTheme] = useState(() => localStorage.getItem('equitrack_theme') || 'dark');
 
   useEffect(() => {
@@ -31,14 +29,11 @@ export const App = () => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  // Watchlist state
   const [watchlist, setWatchlist] = useState([]);
   const [watchlistLoading, setWatchlistLoading] = useState(false);
 
-  // Profile modal state
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-  // Notification Toast state
   const [notification, setNotification] = useState(null);
 
   const showNotification = useCallback((notif) => {
@@ -48,25 +43,38 @@ export const App = () => {
     }, 3500);
   }, []);
 
-  // Fetch watchlist when authenticated
-  const fetchWatchlist = useCallback(async () => {
+  // isBackgroundRefresh = true means: refresh quietly, don't touch the loading spinner
+  const fetchWatchlist = useCallback(async (isBackgroundRefresh = false) => {
     if (!isAuthenticated) return;
     try {
-      setWatchlistLoading(true);
+      if (!isBackgroundRefresh) setWatchlistLoading(true);
       const data = await getWatchlistApi();
       setWatchlist(Array.isArray(data) ? data : []);
     } catch (err) {
       console.warn('Failed to fetch watchlist:', err.message);
     } finally {
-      setWatchlistLoading(false);
+      if (!isBackgroundRefresh) setWatchlistLoading(false);
     }
   }, [isAuthenticated]);
 
   useEffect(() => {
     if (isAuthenticated) {
-      fetchWatchlist();
+      fetchWatchlist(false); // real loading state only on first load
     }
   }, [isAuthenticated, fetchWatchlist]);
+
+  // Instantly remove an item from the screen — doesn't wait on a slow re-fetch.
+  const removeWatchlistItemLocally = useCallback((symbol) => {
+    setWatchlist((prev) => prev.filter((item) => item.symbol !== symbol));
+  }, []);
+
+  // Instantly add a placeholder item to the screen so it shows up right away.
+  const addWatchlistItemLocally = useCallback((symbol, companyName, exchange = 'NSE') => {
+    setWatchlist((prev) => {
+      if (prev.some((item) => item.symbol === symbol)) return prev;
+      return [{ symbol, companyName, exchange, currentPrice: null, changePercent: null, addedOn: null }, ...prev];
+    });
+  }, []);
 
   const watchlistSymbols = new Set(watchlist.map((item) => item.symbol));
 
@@ -120,7 +128,6 @@ export const App = () => {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--apple-canvas-parchment)' }}>
-      {/* Apple 2-row Navigation */}
       <Navbar
         activeTab={activeTab}
         setActiveTab={(tab) => {
@@ -135,7 +142,6 @@ export const App = () => {
         onToggleTheme={toggleTheme}
       />
 
-      {/* Main Canvas Area */}
       <main
         style={{
           flex: 1,
@@ -157,7 +163,8 @@ export const App = () => {
           <SearchView
             onSelectStock={handleSelectStock}
             watchlistSymbols={watchlistSymbols}
-            onWatchlistChanged={fetchWatchlist}
+            onWatchlistChanged={() => fetchWatchlist(true)}
+            onWatchlistAddedLocal={addWatchlistItemLocally}
             onNotification={showNotification}
           />
         )}
@@ -168,7 +175,8 @@ export const App = () => {
             loading={watchlistLoading}
             onSelectStock={handleSelectStock}
             onNavigateSearch={() => setActiveTab('search')}
-            onWatchlistChanged={fetchWatchlist}
+            onWatchlistChanged={() => fetchWatchlist(true)}
+            onWatchlistRemovedLocal={removeWatchlistItemLocally}
             onNotification={showNotification}
           />
         )}
@@ -178,20 +186,20 @@ export const App = () => {
             symbol={selectedStockSymbol}
             onBack={handleBackFromDetails}
             isInWatchlist={watchlistSymbols.has(selectedStockSymbol)}
-            onWatchlistChanged={fetchWatchlist}
+            onWatchlistChanged={() => fetchWatchlist(true)}
+            onWatchlistAddedLocal={addWatchlistItemLocally}
+            onWatchlistRemovedLocal={removeWatchlistItemLocally}
             onNotification={showNotification}
           />
         )}
       </main>
 
-      {/* Profile Modal */}
       <ProfileModal
         isOpen={isProfileOpen}
         onClose={() => setIsProfileOpen(false)}
         onNotification={showNotification}
       />
 
-      {/* Notification Toast */}
       <NotificationToast
         notification={notification}
         onClose={() => setNotification(null)}

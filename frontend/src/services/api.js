@@ -111,7 +111,7 @@ export const getDashboardDataApi = async () => {
 };
 
 export const searchStocksApi = async (query = '') => {
-  return await apiFetch(`/stocks/search?q=${encodeURIComponent(query)}`);
+  return await apiFetch(`/market/search?q=${encodeURIComponent(query)}`);
 };
 
 export const getCompanyDetailsApi = async (symbol, duration = '1d') => {

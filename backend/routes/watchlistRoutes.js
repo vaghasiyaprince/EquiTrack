@@ -9,6 +9,6 @@ const { protect } = require('../middleware/authMiddleware');
 
 router.get('/', protect, getWatchlist);
 router.post('/', protect, addToWatchlist);
-router.delete('/:id', protect, removeFromWatchlist);
+router.delete('/:symbol', protect, removeFromWatchlist);
 
 module.exports = router;

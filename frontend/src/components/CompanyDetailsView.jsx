@@ -18,6 +18,8 @@ export const CompanyDetailsView = ({
   onBack,
   isInWatchlist = false,
   onWatchlistChanged,
+  onWatchlistAddedLocal,
+  onWatchlistRemovedLocal,
   onNotification,
 }) => {
   const [stock, setStock] = useState(null);
@@ -33,16 +35,17 @@ export const CompanyDetailsView = ({
 
   useEffect(() => {
     let isMounted = true;
-    const fetchDetails = async () => {
+    const fetchDetails = async (isBackgroundRefresh = false) => {
       if (!symbol) return;
       try {
+        if (!isBackgroundRefresh) setLoading(true);
         const data = await getCompanyDetailsApi(symbol, duration);
         if (isMounted) {
           setStock(data);
           setError(null);
         }
       } catch (err) {
-        if (isMounted) {
+        if (isMounted && !isBackgroundRefresh) {
           setError(err.message || 'Failed to load company details');
         }
       } finally {
@@ -52,9 +55,14 @@ export const CompanyDetailsView = ({
       }
     };
 
-    fetchDetails();
+    fetchDetails(false);
+
+    // Auto-refresh price every 15 seconds while this page is open
+    const intervalId = setInterval(() => fetchDetails(true), 15000);
+
     return () => {
       isMounted = false;
+      clearInterval(intervalId);
     };
   }, [symbol, duration]);
 
@@ -68,13 +76,15 @@ export const CompanyDetailsView = ({
         setWatchlistActive(false);
         const msg = res.message || 'Stock removed successfully';
         if (onNotification) onNotification({ type: 'success', message: msg });
-        if (onWatchlistChanged) onWatchlistChanged();
+        if (onWatchlistRemovedLocal) onWatchlistRemovedLocal(stock.symbol); // instant
+        if (onWatchlistChanged) onWatchlistChanged(); // background refresh for accuracy
       } else {
         const res = await addToWatchlistApi(stock.symbol, stock.companyName || stock.name);
         setWatchlistActive(true);
         const msg = res.message || 'Stock added successfully';
         if (onNotification) onNotification({ type: 'success', message: msg });
-        if (onWatchlistChanged) onWatchlistChanged();
+        if (onWatchlistAddedLocal) onWatchlistAddedLocal(stock.symbol, stock.companyName || stock.name, stock.exchange); // instant
+        if (onWatchlistChanged) onWatchlistChanged(); // background refresh for accuracy
       }
     } catch (err) {
       if (onNotification) onNotification({ type: 'error', message: err.message || 'Watchlist update failed' });
@@ -260,11 +270,17 @@ export const CompanyDetailsView = ({
           </div>
         </div>
 
-        <StockChart
-          data={stock.chartData}
-          currentPrice={stock.currentPrice}
-          isBullish={isBullish}
-        />
+        {stock.chartData && stock.chartData.length > 0 ? (
+          <StockChart
+            data={stock.chartData}
+            currentPrice={stock.currentPrice}
+            isBullish={isBullish}
+          />
+        ) : (
+          <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--apple-body-muted)', fontSize: '14px' }}>
+            No intraday data available for this timeframe right now — this is common outside market hours (9:15 AM–3:30 PM IST, Mon–Fri). Try 1W or 1M.
+          </div>
+        )}
       </div>
 
       {/* Company Description (R.3.6) */}
