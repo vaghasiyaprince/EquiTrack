@@ -32,6 +32,11 @@ const getStockDetails = async (req, res) => {
     const chartData = (candles || []).map((c) => ({
       timestamp: c.timestamp,
       price: c.close,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+      volume: c.volume,
     }));
 
     const info = getCompanyInfo(quote.symbol);
@@ -51,7 +56,23 @@ const getStockDetails = async (req, res) => {
     });
   } catch (error) {
     console.error('getStockDetails error:', error.message);
-    return res.status(500).json({ message: 'Failed to fetch stock details', error: error.message });
+    const isWeak =
+      error.code === 'WEAK_CONNECTION' ||
+      error.code === 'ETIMEDOUT' ||
+      error.code === 'ECONNABORTED' ||
+      (error.message && error.message.toLowerCase().includes('timeout'));
+
+    if (isWeak) {
+      return res.status(504).json({
+        message: 'Weak connection: Live stock data timed out. Please check your internet connection.',
+        isWeakConnection: true,
+      });
+    }
+
+    return res.status(error.statusCode || 500).json({
+      message: error.message || 'Failed to fetch live stock details from Angel One',
+      error: error.message,
+    });
   }
 };
 

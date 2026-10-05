@@ -52,14 +52,19 @@ export const App = () => {
       setWatchlist(Array.isArray(data) ? data : []);
     } catch (err) {
       console.warn('Failed to fetch watchlist:', err.message);
+      if (err.isWeakConnection && showNotification) {
+        showNotification({ type: 'error', message: 'Weak Connection: Live watchlist feed is taking longer than usual.' });
+      }
     } finally {
       if (!isBackgroundRefresh) setWatchlistLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, showNotification]);
 
   useEffect(() => {
     if (isAuthenticated) {
       fetchWatchlist(false); // real loading state only on first load
+      const intervalId = setInterval(() => fetchWatchlist(true), 15000);
+      return () => clearInterval(intervalId);
     }
   }, [isAuthenticated, fetchWatchlist]);
 

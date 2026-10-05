@@ -18,22 +18,41 @@ export const apiFetch = async (endpoint, options = {}) => {
     ...(options.headers || {}),
   };
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), options.timeout || 12000);
 
-  const data = await response.json().catch(() => ({}));
+  try {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+      signal: options.signal || controller.signal,
+    });
 
-  if (!response.ok) {
-    const errorMsg = data.message || `Request failed with status ${response.status}`;
-    const error = new Error(errorMsg);
-    error.status = response.status;
-    error.data = data;
-    throw error;
+    clearTimeout(timeoutId);
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const isWeak = response.status === 504 || data.isWeakConnection;
+      const errorMsg = data.message || `Request failed with status ${response.status}`;
+      const error = new Error(isWeak ? 'Weak Connection: Live Angel One feed is unreachable or timed out' : errorMsg);
+      error.status = response.status;
+      error.isWeakConnection = isWeak;
+      error.data = data;
+      throw error;
+    }
+
+    return data;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError' || !navigator.onLine) {
+      const weakErr = new Error('Weak Connection: Network request timed out. Please check your internet connection.');
+      weakErr.status = 504;
+      weakErr.isWeakConnection = true;
+      throw weakErr;
+    }
+    throw err;
   }
-
-  return data;
 };
 
 // ================= USER MANAGEMENT API (R.1 / Lab 03) =================

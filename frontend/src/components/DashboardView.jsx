@@ -19,9 +19,9 @@ export const DashboardView = ({ onSelectStock, onNavigateSearch, onNavigateWatch
 
   useEffect(() => {
     let isMounted = true;
-    const loadDashboard = async () => {
+    const loadDashboard = async (isBackgroundRefresh = false) => {
       try {
-        setLoading(true);
+        if (!isBackgroundRefresh) setLoading(true);
         const res = await getDashboardDataApi();
         if (isMounted) {
           setData({
@@ -32,32 +32,66 @@ export const DashboardView = ({ onSelectStock, onNavigateSearch, onNavigateWatch
           setError(null);
         }
       } catch (err) {
-        if (isMounted) {
+        if (isMounted && !isBackgroundRefresh) {
           setError(err.message || 'Failed to load market data');
         }
       } finally {
-        if (isMounted) {
+        if (isMounted && !isBackgroundRefresh) {
           setLoading(false);
         }
       }
     };
 
-    loadDashboard();
+    loadDashboard(false);
+
+    // Auto-refresh market overview every 15 seconds during live market hours
+    const intervalId = setInterval(() => loadDashboard(true), 15000);
+
     return () => {
       isMounted = false;
+      clearInterval(intervalId);
     };
   }, []);
 
   if (loading) {
     return (
       <div style={{ padding: '5rem 0', textAlign: 'center', color: 'var(--apple-body-muted)' }}>
-        <p style={{ fontSize: '15px' }}>Loading market overview...</p>
+        <p style={{ fontSize: '15px' }}>Loading market overview from live Angel One API...</p>
       </div>
     );
   }
 
   return (
     <div className="apple-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+      {error && (
+        <div
+          className="apple-card"
+          style={{
+            backgroundColor: 'rgba(255, 59, 48, 0.08)',
+            border: '1px solid rgba(255, 59, 48, 0.25)',
+            padding: '16px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '18px' }}>⚠️</span>
+            <span style={{ fontSize: '14px', color: 'var(--apple-red)', fontWeight: 500 }}>
+              {error}
+            </span>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="apple-btn-pill apple-btn-pill-secondary"
+            style={{ padding: '4px 12px', fontSize: '12px' }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Hero Product Tile (Apple Style: Centered Headline, Tagline, Blue Pill CTA) */}
       <div
         className="apple-card"

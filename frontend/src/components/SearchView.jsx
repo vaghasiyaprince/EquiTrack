@@ -18,6 +18,7 @@ export const SearchView = ({
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [addingSymbol, setAddingSymbol] = useState(null);
 
   useEffect(() => {
@@ -25,18 +26,22 @@ export const SearchView = ({
     const timer = setTimeout(async () => {
       try {
         setLoading(true);
+        setError(null);
         const data = await searchStocksApi(query);
         if (isMounted) {
-          setResults(data || []);
+          setResults(Array.isArray(data) ? data : []);
         }
       } catch (err) {
-        console.warn('Search error:', err.message);
+        if (isMounted) {
+          // If query was empty, don't scream error unless necessary
+          setError(err.message || 'Error communicating with live search service');
+        }
       } finally {
         if (isMounted) {
           setLoading(false);
         }
       }
-    }, 200);
+    }, 350);
 
     return () => {
       clearTimeout(timer);
@@ -126,10 +131,41 @@ export const SearchView = ({
         )}
       </div>
 
+      {error && (
+        <div
+          className="apple-card"
+          style={{
+            backgroundColor: 'rgba(255, 59, 48, 0.08)',
+            border: '1px solid rgba(255, 59, 48, 0.25)',
+            padding: '14px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+          }}
+        >
+          <span style={{ fontSize: '18px' }}>⚠️</span>
+          <span style={{ fontSize: '14px', color: 'var(--apple-red)', fontWeight: 500 }}>
+            {error}
+          </span>
+        </div>
+      )}
+
       {/* Results List */}
-      {results.length > 0 ? (
-        <div className="apple-card" style={{ padding: '8px 24px' }}>
-          {results.map((stock, idx) => {
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--apple-ink)' }}>
+            {query.trim() ? `Results for "${query.trim()}"` : 'Popular Equities (NSE)'}
+          </h2>
+          {loading && (
+            <span style={{ fontSize: '13px', color: 'var(--apple-body-muted)' }}>
+              Searching live feed...
+            </span>
+          )}
+        </div>
+
+        {results.length > 0 ? (
+          <div className="apple-card" style={{ padding: '8px 24px', opacity: loading ? 0.65 : 1, transition: 'opacity 0.2s' }}>
+            {results.map((stock, idx) => {
             const inWatchlist = watchlistSymbols.has(stock.symbol);
             const isBullish = (stock.changePercent ?? 0) >= 0;
 
@@ -198,13 +234,14 @@ export const SearchView = ({
             );
           })}
         </div>
-      ) : !loading ? (
-        <div className="apple-card" style={{ padding: '40px', textAlign: 'center' }}>
-          <p style={{ color: 'var(--apple-body-muted)', fontSize: '15px' }}>
-            No equities matching "{query}".
-          </p>
-        </div>
-      ) : null}
+        ) : !loading ? (
+          <div className="apple-card" style={{ padding: '40px', textAlign: 'center' }}>
+            <p style={{ color: 'var(--apple-body-muted)', fontSize: '15px' }}>
+              No equities matching "{query}".
+            </p>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 };

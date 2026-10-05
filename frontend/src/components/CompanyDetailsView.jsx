@@ -109,15 +109,25 @@ export const CompanyDetailsView = ({
   }
 
   if (error || !stock) {
+    const isWeak = typeof error === 'string' && error.toLowerCase().includes('weak connection');
     return (
-      <div className="apple-card" style={{ padding: '40px', textAlign: 'center' }}>
-        <p style={{ color: 'var(--apple-red)', marginBottom: '16px', fontSize: '15px' }}>
-          {error || 'Unable to retrieve company information.'}
+      <div className="apple-card" style={{ padding: '48px 24px', textAlign: 'center' }}>
+        <div style={{ fontSize: '32px', marginBottom: '12px' }}>{isWeak ? '📡' : '⚠️'}</div>
+        <h3 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--apple-ink)', marginBottom: '8px' }}>
+          {isWeak ? 'Weak Network Connection' : 'Unable to Retrieve Market Data'}
+        </h3>
+        <p style={{ color: 'var(--apple-body-muted)', marginBottom: '24px', fontSize: '15px', maxWidth: '480px', margin: '0 auto 24px auto' }}>
+          {error || 'Unable to communicate with the Angel One live market server.'}
         </p>
-        <button onClick={onBack} className="apple-back-btn">
-          <ChevronLeft size={16} color="var(--apple-primary)" strokeWidth={2.5} />
-          <span>Back to Market</span>
-        </button>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+          <button onClick={() => window.location.reload()} className="apple-btn-pill">
+            <span>Try Again</span>
+          </button>
+          <button onClick={onBack} className="apple-back-btn">
+            <ChevronLeft size={16} color="var(--apple-primary)" strokeWidth={2.5} />
+            <span>Back to Market</span>
+          </button>
+        </div>
       </div>
     );
   }
@@ -275,6 +285,9 @@ export const CompanyDetailsView = ({
             data={stock.chartData}
             currentPrice={stock.currentPrice}
             isBullish={isBullish}
+            symbol={stock.symbol}
+            exchange={stock.exchange}
+            duration={duration}
           />
         ) : (
           <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--apple-body-muted)', fontSize: '14px' }}>

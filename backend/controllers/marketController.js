@@ -12,53 +12,80 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // endpoint, gainers/losers, dashboard, and the merged stock details endpoint
 // Core helper — fetches a quote when we already know the token
 // (avoids a redundant token-lookup API call when the caller already has it)
-const fetchQuoteByToken = async (token, exchange = 'NSE') => {
+// Helper to detect weak connection / network timeout
+const isWeakConnectionError = (error) => {
+  const code = error.code || error.response?.data?.errorcode || error.response?.data?.message;
+  const msg = (error.message || '').toLowerCase();
+  return (
+    code === 'ECONNABORTED' ||
+    code === 'ETIMEDOUT' ||
+    code === 'ENOTFOUND' ||
+    code === 'ECONNRESET' ||
+    code === 'WEAK_CONNECTION' ||
+    msg.includes('timeout') ||
+    msg.includes('network') ||
+    msg.includes('econnrefused')
+  );
+};
+
+// Batch quote helper — fetches quotes for up to 50 tokens in a single HTTP request!
+const fetchBatchQuotesByTokens = async (tokens, exchange = 'NSE') => {
+  if (!tokens || tokens.length === 0) return [];
   const smartApi = await getAngelSession();
 
-
-  const response = await axios.post(
-    'https://apiconnect.angelbroking.com/rest/secure/angelbroking/market/v1/quote/',
-    {
-      mode: 'FULL',
-      exchangeTokens: { [exchange]: [token] },
-    },
-    {
-      httpsAgent: agent,
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'X-UserType': 'USER',
-        'X-SourceID': 'WEB',
-        'X-ClientLocalIP': '127.0.0.1',
-        'X-ClientPublicIP': '127.0.0.1',
-        'X-MACAddress': '00:00:00:00:00:00',
-        'X-PrivateKey': process.env.ANGEL_API_KEY,
-        Authorization: `Bearer ${smartApi.access_token}`,
+  try {
+    const response = await axios.post(
+      'https://apiconnect.angelbroking.com/rest/secure/angelbroking/market/v1/quote/',
+      {
+        mode: 'FULL',
+        exchangeTokens: { [exchange]: tokens },
       },
+      {
+        httpsAgent: agent,
+        timeout: 10000, // 10s timeout to quickly identify weak connection
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'X-UserType': 'USER',
+          'X-SourceID': 'WEB',
+          'X-ClientLocalIP': '127.0.0.1',
+          'X-ClientPublicIP': '127.0.0.1',
+          'X-MACAddress': '00:00:00:00:00:00',
+          'X-PrivateKey': process.env.ANGEL_API_KEY,
+          Authorization: `Bearer ${smartApi.access_token}`,
+        },
+      }
+    );
+
+    const fetched = response.data?.data?.fetched || [];
+    return fetched.map((quote) => ({
+      symbol: quote.tradingSymbol,
+      exchange: quote.exchange,
+      price: quote.ltp,
+      open: quote.open,
+      dayHigh: quote.high,
+      dayLow: quote.low,
+      previousClose: quote.close,
+      change: quote.netChange,
+      changePercent: quote.percentChange,
+    }));
+  } catch (error) {
+    if (isWeakConnectionError(error)) {
+      const netError = new Error('Weak connection: Angel One API connection timed out or is unreachable');
+      netError.code = 'WEAK_CONNECTION';
+      throw netError;
     }
-  );
-
-  const fetched = response.data?.data?.fetched;
-  if (!fetched || fetched.length === 0) {
-    return null;
+    throw error;
   }
-
-  const quote = fetched[0];
-
-  return {
-    symbol: quote.tradingSymbol,
-    exchange: quote.exchange,
-    price: quote.ltp,
-    open: quote.open,
-    dayHigh: quote.high,
-    dayLow: quote.low,
-    previousClose: quote.close,
-    change: quote.netChange,
-    changePercent: quote.percentChange,
-  };
 };
+
+// Core helper — fetches a quote when we already know the token
+const fetchQuoteByToken = async (token, exchange = 'NSE') => {
+  const quotes = await fetchBatchQuotesByTokens([token], exchange);
+  return quotes.length > 0 ? quotes[0] : null;
+};
+
 // Convenience wrapper — looks up the token first, then fetches the quote.
-// Used when the caller only has a symbol, not a token, in hand.
 const fetchQuoteData = async (symbol, exchange = 'NSE') => {
   const token = await findToken(symbol, exchange);
   if (!token) {
@@ -77,14 +104,20 @@ const getQuote = async (req, res) => {
 
     const data = await fetchQuoteData(symbol, exchange);
     if (!data) {
-      return res.status(404).json({ message: `Symbol '${symbol}' not found or no data returned` });
+      return res.status(404).json({ message: `Symbol '${symbol}' not found or no live data returned` });
     }
 
     return res.json(data);
   } catch (error) {
-    console.error('getQuote error:', error.response?.data || error.message);
-    return res.status(500).json({
-      message: 'Failed to fetch quote',
+    console.error('getQuote error:', error.message);
+    if (isWeakConnectionError(error)) {
+      return res.status(504).json({
+        message: 'Weak connection: Unable to reach Angel One live API. Please check your internet connection.',
+        isWeakConnection: true,
+      });
+    }
+    return res.status(error.statusCode || 500).json({
+      message: error.message || 'Failed to fetch live quote from Angel One',
       error: error.response?.data || error.message,
     });
   }
@@ -95,28 +128,34 @@ const getQuote = async (req, res) => {
 // @access  Private
 const getGainersLosers = async (req, res) => {
   try {
-    const results = [];
+    // Resolve tokens concurrently or in fast batches to drastically reduce delay
+    const tokenPromises = CURATED_SYMBOLS.map((symbol) => findToken(symbol, 'NSE'));
+    const tokens = (await Promise.all(tokenPromises)).filter(Boolean);
 
-    // Sequential with a small delay to stay well within Angel One's rate limits
-    for (const symbol of CURATED_SYMBOLS) {
-      try {
-        const data = await fetchQuoteData(symbol, 'NSE');
-        if (data) results.push(data);
-      } catch (err) {
-        console.warn(`Skipping ${symbol}:`, err.message);
-      }
-      await sleep(150);
+    if (tokens.length === 0) {
+      return res.json({ gainers: [], losers: [] });
     }
 
-    const sorted = [...results].sort((a, b) => b.changePercent - a.changePercent);
+    // Single batch request to Angel One for all stocks
+    const quotes = await fetchBatchQuotesByTokens(tokens, 'NSE');
 
+    const sorted = [...quotes].sort((a, b) => b.changePercent - a.changePercent);
     const gainers = sorted.filter((s) => s.changePercent > 0).slice(0, 5);
     const losers = sorted.filter((s) => s.changePercent < 0).slice(-5).reverse();
 
     return res.json({ gainers, losers });
   } catch (error) {
     console.error('getGainersLosers error:', error.message);
-    return res.status(500).json({ message: 'Failed to fetch gainers/losers', error: error.message });
+    if (isWeakConnectionError(error)) {
+      return res.status(504).json({
+        message: 'Weak connection: Live market feed delayed or timed out. Please check your connection.',
+        isWeakConnection: true,
+      });
+    }
+    return res.status(error.statusCode || 500).json({
+      message: error.message || 'Failed to fetch live gainers/losers from Angel One',
+      error: error.message,
+    });
   }
 };
 
@@ -147,44 +186,54 @@ const fetchCandleData = async (symbol, exchange, interval, days) => {
   const fromDate = new Date();
   fromDate.setDate(fromDate.getDate() - days);
 
-  const response = await axios.post(
-    'https://apiconnect.angelbroking.com/rest/secure/angelbroking/historical/v1/getCandleData',
-    {
-      exchange,
-      symboltoken: token,
-      interval,
-      fromdate: formatDateForAngel(fromDate),
-      todate: formatDateForAngel(toDate),
-    },
-    {
-      httpsAgent: agent,
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'X-UserType': 'USER',
-        'X-SourceID': 'WEB',
-        'X-ClientLocalIP': '127.0.0.1',
-        'X-ClientPublicIP': '127.0.0.1',
-        'X-MACAddress': '00:00:00:00:00:00',
-        'X-PrivateKey': process.env.ANGEL_API_KEY,
-        Authorization: `Bearer ${smartApi.access_token}`,
+  try {
+    const response = await axios.post(
+      'https://apiconnect.angelbroking.com/rest/secure/angelbroking/historical/v1/getCandleData',
+      {
+        exchange,
+        symboltoken: token,
+        interval,
+        fromdate: formatDateForAngel(fromDate),
+        todate: formatDateForAngel(toDate),
       },
+      {
+        httpsAgent: agent,
+        timeout: 10000,
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'X-UserType': 'USER',
+          'X-SourceID': 'WEB',
+          'X-ClientLocalIP': '127.0.0.1',
+          'X-ClientPublicIP': '127.0.0.1',
+          'X-MACAddress': '00:00:00:00:00:00',
+          'X-PrivateKey': process.env.ANGEL_API_KEY,
+          Authorization: `Bearer ${smartApi.access_token}`,
+        },
+      }
+    );
+
+    const raw = response.data?.data;
+    if (!raw || raw.length === 0) {
+      return null;
     }
-  );
 
-  const raw = response.data?.data;
-  if (!raw || raw.length === 0) {
-    return null;
+    return raw.map(([timestamp, open, high, low, close, volume]) => ({
+      timestamp,
+      open,
+      high,
+      low,
+      close,
+      volume,
+    }));
+  } catch (error) {
+    if (isWeakConnectionError(error)) {
+      const netError = new Error('Weak connection: Historical chart data request timed out');
+      netError.code = 'WEAK_CONNECTION';
+      throw netError;
+    }
+    throw error;
   }
-
-  return raw.map(([timestamp, open, high, low, close, volume]) => ({
-    timestamp,
-    open,
-    high,
-    low,
-    close,
-    volume,
-  }));
 };
 
 // @desc    Get historical candle data for charting
@@ -203,17 +252,31 @@ const getCandles = async (req, res) => {
 
     const candles = await fetchCandleData(symbol, exchange, config.interval, config.days);
     if (!candles) {
-      return res.status(502).json({ message: 'No candle data returned' });
+      return res.status(502).json({ message: 'No candle data returned from live market feed' });
     }
 
     return res.json({ symbol, period, candles });
   } catch (error) {
-    console.error('getCandles error:', error.response?.data || error.message);
-    return res.status(500).json({
-      message: 'Failed to fetch candle data',
+    console.error('getCandles error:', error.message);
+    if (isWeakConnectionError(error)) {
+      return res.status(504).json({
+        message: 'Weak connection: Live chart data timed out. Please check your internet connection.',
+        isWeakConnection: true,
+      });
+    }
+    return res.status(error.statusCode || 500).json({
+      message: error.message || 'Failed to fetch live candle data from Angel One',
       error: error.response?.data || error.message,
     });
   }
 };
 
-module.exports = { getQuote, getGainersLosers, getCandles, fetchQuoteData, fetchCandleData, fetchQuoteByToken };
+module.exports = {
+  getQuote,
+  getGainersLosers,
+  getCandles,
+  fetchQuoteData,
+  fetchCandleData,
+  fetchQuoteByToken,
+  fetchBatchQuotesByTokens,
+};

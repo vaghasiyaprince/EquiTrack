@@ -4,6 +4,9 @@ const { getCompanyInfo } = require('../data/companyInfo');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const { fetchBatchQuotesByTokens } = require('./marketController');
+const { findToken } = require('../utils/instrumentMaster');
+
 // @desc    Get all watchlist items for the logged-in user, enriched with live price
 // @route   GET /api/watchlist
 // @access  Private
@@ -11,38 +14,69 @@ const getWatchlist = async (req, res) => {
   try {
     const items = await Watchlist.find({ userId: req.user._id }).sort({ addedAt: -1 });
 
-    const enriched = [];
-    for (const item of items) {
-      let currentPrice = null;
-      let changePercent = null;
+    if (items.length === 0) {
+      return res.json([]);
+    }
 
-      try {
-        const quote = await fetchQuoteData(item.symbol, item.exchange);
-        if (quote) {
-          currentPrice = quote.price;
-          changePercent = quote.changePercent;
+    // Resolve tokens for watchlist symbols
+    const tokenPairs = await Promise.all(
+      items.map(async (item) => {
+        try {
+          const token = await findToken(item.symbol, item.exchange || 'NSE');
+          return { symbol: item.symbol, token };
+        } catch {
+          return { symbol: item.symbol, token: null };
         }
-      } catch (err) {
-        console.warn(`Watchlist: could not fetch quote for ${item.symbol}:`, err.message);
-      }
+      })
+    );
 
+    const tokens = tokenPairs.map((p) => p.token).filter(Boolean);
+
+    let quotes = [];
+    try {
+      if (tokens.length > 0) {
+        quotes = await fetchBatchQuotesByTokens(tokens, 'NSE');
+      }
+    } catch (err) {
+      console.warn('Watchlist: batch quote fetch error:', err.message);
+    }
+
+    const quoteMap = new Map();
+    for (const q of quotes) {
+      quoteMap.set(q.symbol, q);
+    }
+
+    const enriched = items.map((item) => {
+      const quote = quoteMap.get(item.symbol);
       const info = getCompanyInfo(item.symbol);
 
-      enriched.push({
+      return {
         _id: item._id,
         symbol: item.symbol,
         companyName: item.companyName || info.name,
         exchange: item.exchange,
-        currentPrice,
-        changePercent,
+        currentPrice: quote ? quote.price : null,
+        changePercent: quote ? quote.changePercent : null,
         addedOn: item.addedAt ? item.addedAt.toISOString().split('T')[0] : null,
-      });
-
-      await sleep(150);
-    }
+      };
+    });
 
     return res.json(enriched);
   } catch (error) {
+    console.error('getWatchlist error:', error.message);
+    const isWeak =
+      error.code === 'WEAK_CONNECTION' ||
+      error.code === 'ETIMEDOUT' ||
+      error.code === 'ECONNABORTED' ||
+      (error.message && error.message.toLowerCase().includes('timeout'));
+
+    if (isWeak) {
+      return res.status(504).json({
+        message: 'Weak connection: Live watchlist price feed timed out. Please check your internet connection.',
+        isWeakConnection: true,
+      });
+    }
+
     return res.status(500).json({ message: error.message });
   }
 };

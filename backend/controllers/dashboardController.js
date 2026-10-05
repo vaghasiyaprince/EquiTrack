@@ -23,9 +23,12 @@ const enrich = (data) => {
   };
 };
 
+const { fetchBatchQuotesByTokens } = require('./marketController');
+const { findToken } = require('../utils/instrumentMaster');
+
 // @desc    Get dashboard overview: top gainers, top losers, suggested stocks
 // @route   GET /api/dashboard
-// @access  Private
+// @access  Public / Private
 const getDashboard = async (req, res) => {
   try {
     const now = Date.now();
@@ -33,17 +36,25 @@ const getDashboard = async (req, res) => {
       return res.json(dashboardCache);
     }
 
-    const results = [];
-
+    // Resolve curated stock tokens dynamically from live Angel One API
+    // Using serial loop ensures rate limit queuing never trips HTTP 403
+    const tokens = [];
     for (const symbol of CURATED_SYMBOLS) {
       try {
-        const data = await fetchQuoteData(symbol, 'NSE');
-        if (data) results.push(enrich(data));
+        const token = await findToken(symbol, 'NSE');
+        if (token) tokens.push(token);
       } catch (err) {
-        console.warn(`Dashboard: skipping ${symbol}:`, err.message);
+        console.warn(`Dashboard: unable to find live token for ${symbol}:`, err.message);
       }
-      await sleep(150);
     }
+
+    if (tokens.length === 0) {
+      return res.json({ topGainers: [], topLosers: [], suggested: [] });
+    }
+
+    // Batch quote fetch from Angel One API in 1 call!
+    const quotes = await fetchBatchQuotesByTokens(tokens, 'NSE');
+    const results = quotes.map(enrich).filter(Boolean);
 
     const sorted = [...results].sort((a, b) => b.changePercent - a.changePercent);
     const topGainers = sorted.filter((s) => s.changePercent > 0).slice(0, 5);
@@ -58,7 +69,23 @@ const getDashboard = async (req, res) => {
     return res.json(payload);
   } catch (error) {
     console.error('getDashboard error:', error.message);
-    return res.status(500).json({ message: 'Failed to load dashboard data', error: error.message });
+    const isWeak =
+      error.code === 'WEAK_CONNECTION' ||
+      error.code === 'ETIMEDOUT' ||
+      error.code === 'ECONNABORTED' ||
+      (error.message && error.message.toLowerCase().includes('timeout'));
+
+    if (isWeak) {
+      return res.status(504).json({
+        message: 'Weak connection: Live dashboard overview timed out. Please check your internet connection.',
+        isWeakConnection: true,
+      });
+    }
+
+    return res.status(error.statusCode || 500).json({
+      message: error.message || 'Failed to load dashboard data from Angel One',
+      error: error.message,
+    });
   }
 };
 
