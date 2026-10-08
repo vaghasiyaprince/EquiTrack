@@ -1,36 +1,13 @@
 const axios = require('axios');
 const https = require('https');
 const { getAngelSession } = require('./angelClient');
+const Stock = require('../models/Stock');
 
 const agent = new https.Agent({ keepAlive: false });
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// In-memory cache pre-seeded with top NSE liquid tokens for instant resolution without API roundtrips
-const PRE_SEEDED_TOKENS = {
-  'NSE:RELIANCE-EQ': '2885',
-  'NSE:TCS-EQ': '11536',
-  'NSE:INFY-EQ': '1594',
-  'NSE:HDFCBANK-EQ': '1333',
-  'NSE:ICICIBANK-EQ': '4963',
-  'NSE:SBIN-EQ': '3045',
-  'NSE:TATAMOTORS-EQ': '3456',
-  'NSE:TATASTEEL-EQ': '3499',
-  'NSE:ITC-EQ': '1660',
-  'NSE:HINDUNILVR-EQ': '1394',
-  'NSE:BAJFINANCE-EQ': '317',
-  'NSE:BHARTIARTL-EQ': '10604',
-  'NSE:KOTAKBANK-EQ': '1922',
-  'NSE:LT-EQ': '11483',
-  'NSE:MARUTI-EQ': '10999',
-  'NSE:WIPRO-EQ': '3787',
-  'NSE:ASIANPAINT-EQ': '236',
-  'NSE:AXISBANK-EQ': '5900',
-  'NSE:SUNPHARMA-EQ': '3351',
-  'NSE:TITAN-EQ': '3506',
-};
-
-const tokenCache = new Map(Object.entries(PRE_SEEDED_TOKENS));
+const tokenCache = new Map();
 
 // Serial queue to throttle Angel One searchScrip calls to avoid the 3 req/sec rate limit (HTTP 403)
 let lastRequestTime = 0;
@@ -92,13 +69,25 @@ const rateLimitedSearchScrip = async (smartApi, exchange, searchName) => {
   return [];
 };
 
-// Find the token for a given trading symbol + exchange (e.g. "RELIANCE-EQ", "NSE") entirely via live API
+// Find the token for a given trading symbol + exchange (queries MongoDB, then Angel One live API)
 const findToken = async (tradingsymbol, exchange = 'NSE') => {
   const cacheKey = `${exchange}:${tradingsymbol}`;
   if (tokenCache.has(cacheKey)) {
     return tokenCache.get(cacheKey);
   }
 
+  // 1. Check MongoDB Stock collection
+  try {
+    const dbStock = await Stock.findOne({ symbol: tradingsymbol }).lean();
+    if (dbStock && dbStock.token) {
+      tokenCache.set(cacheKey, dbStock.token);
+      return dbStock.token;
+    }
+  } catch (err) {
+    // Continue to live API if DB query fails
+  }
+
+  // 2. Query Angel One live API
   const smartApi = await getAngelSession();
 
   // Angel One's search API expects the bare name, not the "-EQ" suffix
@@ -117,6 +106,24 @@ const findToken = async (tradingsymbol, exchange = 'NSE') => {
 
   const token = chosen.symboltoken;
   tokenCache.set(cacheKey, token);
+
+  // 3. Persist the token to MongoDB Stock collection
+  try {
+    await Stock.findOneAndUpdate(
+      { symbol: tradingsymbol },
+      {
+        $set: {
+          token,
+          exchange,
+          name: chosen.name || tradingsymbol.replace('-EQ', ''),
+        },
+      },
+      { upsert: true }
+    );
+  } catch (err) {
+    // Non-fatal
+  }
+
   return token;
 };
 

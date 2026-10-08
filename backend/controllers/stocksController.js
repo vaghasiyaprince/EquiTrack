@@ -1,5 +1,5 @@
 const { fetchQuoteData, fetchCandleData } = require('./marketController');
-const { getCompanyInfo } = require('../data/companyInfo');
+const { getStockInfoFromDb } = require('../utils/stockDbService');
 
 // Maps the frontend's duration labels to Angel One interval + lookback days
 const DURATION_MAP = {
@@ -39,7 +39,7 @@ const getStockDetails = async (req, res) => {
       volume: c.volume,
     }));
 
-    const info = getCompanyInfo(quote.symbol);
+    const info = await getStockInfoFromDb(quote.symbol);
 
     return res.json({
       symbol: quote.symbol,

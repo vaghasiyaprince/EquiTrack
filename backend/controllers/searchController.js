@@ -1,72 +1,14 @@
 const { getAngelSession } = require('../utils/angelClient');
 const { fetchBatchQuotesByTokens } = require('./marketController');
 const { findToken, rateLimitedSearchScrip } = require('../utils/instrumentMaster');
-const { getCompanyInfo } = require('../data/companyInfo');
+const Stock = require('../models/Stock');
+const {
+  getCuratedStocksFromDb,
+  getStockInfoFromDb,
+  seedStocksIfEmpty,
+} = require('../utils/stockDbService');
 
-// Default top active equities to display when search query is empty
-const DEFAULT_POPULAR_SYMBOLS = [
-  'RELIANCE-EQ',
-  'TCS-EQ',
-  'INFY-EQ',
-  'HDFCBANK-EQ',
-  'ICICIBANK-EQ',
-  'SBIN-EQ',
-  'TATAMOTORS-EQ',
-  'TATASTEEL-EQ',
-  'ITC-EQ',
-  'BHARTIARTL-EQ',
-  'BAJFINANCE-EQ',
-  'LT-EQ',
-];
-
-// Curated dictionary for fast name -> symbol matching
-const CURATED_COMPANIES = [
-  { symbol: 'RELIANCE-EQ', name: 'Reliance Industries Ltd' },
-  { symbol: 'TCS-EQ', name: 'Tata Consultancy Services' },
-  { symbol: 'INFY-EQ', name: 'Infosys Ltd' },
-  { symbol: 'HDFCBANK-EQ', name: 'HDFC Bank Ltd' },
-  { symbol: 'ICICIBANK-EQ', name: 'ICICI Bank Ltd' },
-  { symbol: 'SBIN-EQ', name: 'State Bank of India' },
-  { symbol: 'TATAMOTORS-EQ', name: 'Tata Motors Ltd' },
-  { symbol: 'TATASTEEL-EQ', name: 'Tata Steel Ltd' },
-  { symbol: 'ITC-EQ', name: 'ITC Ltd' },
-  { symbol: 'HINDUNILVR-EQ', name: 'Hindustan Unilever Ltd' },
-  { symbol: 'BAJFINANCE-EQ', name: 'Bajaj Finance Ltd' },
-  { symbol: 'BHARTIARTL-EQ', name: 'Bharti Airtel Ltd' },
-  { symbol: 'KOTAKBANK-EQ', name: 'Kotak Mahindra Bank Ltd' },
-  { symbol: 'LT-EQ', name: 'Larsen & Toubro Ltd' },
-  { symbol: 'MARUTI-EQ', name: 'Maruti Suzuki India Ltd' },
-  { symbol: 'WIPRO-EQ', name: 'Wipro Ltd' },
-  { symbol: 'ASIANPAINT-EQ', name: 'Asian Paints Ltd' },
-  { symbol: 'AXISBANK-EQ', name: 'Axis Bank Ltd' },
-  { symbol: 'SUNPHARMA-EQ', name: 'Sun Pharmaceutical Industries Ltd' },
-  { symbol: 'TITAN-EQ', name: 'Titan Company Ltd' },
-];
-
-// Common keyword aliases
-const KEYWORD_ALIASES = {
-  infosys: 'INFY-EQ',
-  infy: 'INFY-EQ',
-  tcs: 'TCS-EQ',
-  reliance: 'RELIANCE-EQ',
-  jio: 'RELIANCE-EQ',
-  hdfc: 'HDFCBANK-EQ',
-  icici: 'ICICIBANK-EQ',
-  sbi: 'SBIN-EQ',
-  'state bank': 'SBIN-EQ',
-  airtel: 'BHARTIARTL-EQ',
-  bharti: 'BHARTIARTL-EQ',
-  lnt: 'LT-EQ',
-  'l&t': 'LT-EQ',
-  maruti: 'MARUTI-EQ',
-  suzuki: 'MARUTI-EQ',
-  bajaj: 'BAJFINANCE-EQ',
-  wipro: 'WIPRO-EQ',
-  hul: 'HINDUNILVR-EQ',
-  unilever: 'HINDUNILVR-EQ',
-};
-
-// @desc    Search for stocks by name or symbol (live Angel One with local fallback & smart aliases)
+// @desc    Search for stocks by name or symbol (MongoDB stock catalog + live Angel One fallback)
 // @route   GET /api/market/search?q=tata&exchange=NSE
 // @access  Private
 const searchStocks = async (req, res) => {
@@ -74,16 +16,16 @@ const searchStocks = async (req, res) => {
     const { q = '', exchange = 'NSE' } = req.query;
     const cleanQuery = q.trim();
 
-    // 1. If query is empty, return top trending/popular NSE equities with live quotes
+    await seedStocksIfEmpty();
+
+    // 1. If query is empty, return top curated NSE equities stored in MongoDB with live quotes
     if (!cleanQuery) {
+      const defaultStocks = await getCuratedStocksFromDb();
       const tokenMap = new Map();
-      for (const sym of DEFAULT_POPULAR_SYMBOLS) {
-        try {
-          const tok = await findToken(sym, exchange);
-          if (tok) tokenMap.set(sym, tok);
-        } catch (e) {
-          // ignore individual token errors
-        }
+
+      for (const item of defaultStocks) {
+        const tok = item.token || (await findToken(item.symbol, exchange));
+        if (tok) tokenMap.set(item.symbol, tok);
       }
 
       const tokens = Array.from(tokenMap.values());
@@ -93,13 +35,12 @@ const searchStocks = async (req, res) => {
         quoteBySymbol.set(qItem.symbol, qItem);
       }
 
-      const results = DEFAULT_POPULAR_SYMBOLS.map((sym) => {
-        const quote = quoteBySymbol.get(sym);
-        const info = getCompanyInfo(sym);
+      const results = defaultStocks.map((item) => {
+        const quote = quoteBySymbol.get(item.symbol);
         return {
-          symbol: sym,
+          symbol: item.symbol,
           exchange,
-          name: info.name,
+          name: item.name,
           currentPrice: quote ? quote.price : null,
           changePercent: quote ? quote.changePercent : null,
         };
@@ -111,35 +52,34 @@ const searchStocks = async (req, res) => {
     const qLower = cleanQuery.toLowerCase();
     const candidates = new Map(); // key: tradingsymbol, value: { symboltoken, exchange }
 
-    // 2. Check keyword aliases first (e.g. "infosys" -> INFY-EQ)
-    if (KEYWORD_ALIASES[qLower]) {
-      const aliasSymbol = KEYWORD_ALIASES[qLower];
-      try {
-        const tok = await findToken(aliasSymbol, exchange);
-        if (tok) candidates.set(aliasSymbol, { symboltoken: tok, exchange });
-      } catch (e) {}
-    }
+    // 2. Query MongoDB for symbol, name, or keyword alias matches
+    const escapedQuery = cleanQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const dbMatches = await Stock.find({
+      $or: [
+        { symbol: new RegExp(escapedQuery, 'i') },
+        { name: new RegExp(escapedQuery, 'i') },
+        { aliases: qLower },
+      ],
+    }).lean();
 
-    // 3. Check curated companies list for partial matching name or symbol
-    for (const c of CURATED_COMPANIES) {
-      if (
-        c.symbol.toLowerCase().includes(qLower) ||
-        c.name.toLowerCase().includes(qLower) ||
-        c.symbol.replace('-EQ', '').toLowerCase().includes(qLower)
-      ) {
-        if (!candidates.has(c.symbol)) {
-          try {
-            const tok = await findToken(c.symbol, exchange);
-            if (tok) candidates.set(c.symbol, { symboltoken: tok, exchange });
-          } catch (e) {}
-        }
+    for (const match of dbMatches) {
+      let tok = match.token;
+      if (!tok) {
+        try {
+          tok = await findToken(match.symbol, match.exchange || exchange);
+        } catch (e) {}
+      }
+      if (tok) {
+        candidates.set(match.symbol, {
+          symboltoken: tok,
+          exchange: match.exchange || exchange,
+        });
       }
     }
 
-    // 4. Query Angel One live searchScrip using throttled queue
+    // 3. Query Angel One live searchScrip using throttled queue for any uncataloged scrips
     try {
       const smartApi = await getAngelSession();
-      // Remove '-EQ' if user entered it
       const searchScripName = cleanQuery.replace(/-EQ$/i, '');
       const liveResults = await rateLimitedSearchScrip(smartApi, exchange, searchScripName);
 
@@ -151,16 +91,30 @@ const searchStocks = async (req, res) => {
                 symboltoken: item.symboltoken,
                 exchange: item.exchange || exchange,
               });
+
+              // Asynchronously save discovered scrip into MongoDB so it persists permanently
+              Stock.findOneAndUpdate(
+                { symbol: item.tradingsymbol },
+                {
+                  $setOnInsert: {
+                    symbol: item.tradingsymbol,
+                    name: item.name || item.tradingsymbol.replace('-EQ', ''),
+                    exchange: item.exchange || exchange,
+                    token: item.symboltoken,
+                    description: 'Company listed on NSE.',
+                    aliases: [item.tradingsymbol.replace('-EQ', '').toLowerCase()],
+                  },
+                },
+                { upsert: true }
+              ).catch(() => {});
             }
           }
         }
       }
     } catch (angelErr) {
       console.warn('Angel One searchScrip query error:', angelErr.message);
-      // Fallback continues with candidates already gathered from curated list
     }
 
-    // If no results found at all
     if (candidates.size === 0) {
       return res.json([]);
     }
@@ -169,7 +123,7 @@ const searchStocks = async (req, res) => {
     const limitedCandidates = Array.from(candidates.entries()).slice(0, 15);
     const tokensToFetch = limitedCandidates.map(([, data]) => data.symboltoken).filter(Boolean);
 
-    // 5. Fetch batch live quotes from Angel One
+    // 4. Fetch batch live quotes from Angel One
     let quotes = [];
     try {
       quotes = await fetchBatchQuotesByTokens(tokensToFetch, exchange);
@@ -182,13 +136,21 @@ const searchStocks = async (req, res) => {
       quoteBySymbol.set(qItem.symbol, qItem);
     }
 
+    // Retrieve company titles from MongoDB
+    const candidateSymbols = limitedCandidates.map(([sym]) => sym);
+    const dbDocs = await Stock.find({ symbol: { $in: candidateSymbols } }).lean();
+    const docMap = new Map();
+    for (const d of dbDocs) {
+      docMap.set(d.symbol, d);
+    }
+
     const results = limitedCandidates.map(([sym, data]) => {
       const quote = quoteBySymbol.get(sym);
-      const info = getCompanyInfo(sym);
+      const stockDoc = docMap.get(sym);
       return {
         symbol: sym,
         exchange: data.exchange || exchange,
-        name: info.name,
+        name: stockDoc ? stockDoc.name : sym.replace('-EQ', ''),
         currentPrice: quote ? quote.price : null,
         changePercent: quote ? quote.changePercent : null,
       };

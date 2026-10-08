@@ -1,30 +1,16 @@
-const { fetchQuoteData } = require('./marketController');
-const { getCompanyInfo } = require('../data/companyInfo');
-const { CURATED_SYMBOLS } = require('../data/curatedSymbols');
+const { fetchQuoteData, fetchBatchQuotesByTokens } = require('./marketController');
+const {
+  getCuratedStocksFromDb,
+  getSuggestedSymbolsFromDb,
+} = require('../utils/stockDbService');
+const { findToken } = require('../utils/instrumentMaster');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const SUGGESTED_SYMBOLS = ['HDFCBANK-EQ', 'LT-EQ', 'TITAN-EQ', 'WIPRO-EQ', 'AXISBANK-EQ', 'ASIANPAINT-EQ'];
 
 // Simple in-memory cache — avoids re-fetching 20 stocks on every tab switch
 let dashboardCache = null;
 let dashboardCacheTime = 0;
 const CACHE_DURATION_MS = 30 * 1000; // 30 seconds
-
-const enrich = (data) => {
-  if (!data) return null;
-  const info = getCompanyInfo(data.symbol);
-  return {
-    symbol: data.symbol,
-    name: info.name,
-    exchange: data.exchange,
-    currentPrice: data.price,
-    changePercent: data.changePercent,
-  };
-};
-
-const { fetchBatchQuotesByTokens } = require('./marketController');
-const { findToken } = require('../utils/instrumentMaster');
 
 // @desc    Get dashboard overview: top gainers, top losers, suggested stocks
 // @route   GET /api/dashboard
@@ -36,15 +22,22 @@ const getDashboard = async (req, res) => {
       return res.json(dashboardCache);
     }
 
-    // Resolve curated stock tokens dynamically from live Angel One API
-    // Using serial loop ensures rate limit queuing never trips HTTP 403
+    // Retrieve curated stocks and suggested symbols dynamically from MongoDB
+    const curatedStocks = await getCuratedStocksFromDb();
+    const suggestedSymbols = await getSuggestedSymbolsFromDb();
+
+    const stockInfoMap = new Map();
+    for (const s of curatedStocks) {
+      stockInfoMap.set(s.symbol, s);
+    }
+
     const tokens = [];
-    for (const symbol of CURATED_SYMBOLS) {
+    for (const stock of curatedStocks) {
       try {
-        const token = await findToken(symbol, 'NSE');
+        const token = stock.token || (await findToken(stock.symbol, stock.exchange || 'NSE'));
         if (token) tokens.push(token);
       } catch (err) {
-        console.warn(`Dashboard: unable to find live token for ${symbol}:`, err.message);
+        console.warn(`Dashboard: unable to find live token for ${stock.symbol}:`, err.message);
       }
     }
 
@@ -54,12 +47,24 @@ const getDashboard = async (req, res) => {
 
     // Batch quote fetch from Angel One API in 1 call!
     const quotes = await fetchBatchQuotesByTokens(tokens, 'NSE');
-    const results = quotes.map(enrich).filter(Boolean);
+    const results = quotes
+      .map((q) => {
+        if (!q) return null;
+        const info = stockInfoMap.get(q.symbol);
+        return {
+          symbol: q.symbol,
+          name: info ? info.name : q.symbol.replace('-EQ', ''),
+          exchange: q.exchange,
+          currentPrice: q.price,
+          changePercent: q.changePercent,
+        };
+      })
+      .filter(Boolean);
 
     const sorted = [...results].sort((a, b) => b.changePercent - a.changePercent);
     const topGainers = sorted.filter((s) => s.changePercent > 0).slice(0, 5);
     const topLosers = sorted.filter((s) => s.changePercent < 0).slice(-5).reverse();
-    const suggested = results.filter((s) => SUGGESTED_SYMBOLS.includes(s.symbol));
+    const suggested = results.filter((s) => suggestedSymbols.includes(s.symbol));
 
     const payload = { topGainers, topLosers, suggested };
 

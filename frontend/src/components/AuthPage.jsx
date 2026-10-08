@@ -45,10 +45,6 @@ export const AuthPage = ({ onSuccess }) => {
     }
   };
 
-  const handleFillDemo = () => {
-    setEmail('test1@example.com');
-    setPassword('password123');
-  };
 
   return (
     <div
@@ -259,17 +255,7 @@ export const AuthPage = ({ onSuccess }) => {
           </button>
         </form>
 
-        {!isRegister && (
-          <div style={{ textAlign: 'center', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--apple-hairline)' }}>
-            <span
-              onClick={handleFillDemo}
-              className="apple-link"
-              style={{ fontSize: '13px' }}
-            >
-              Fill Demo Credentials (test1@example.com)
-            </span>
-          </div>
-        )}
+
       </div>
     </div>
   );

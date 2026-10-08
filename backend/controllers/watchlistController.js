@@ -1,11 +1,9 @@
 const Watchlist = require('../models/Watchlist');
-const { fetchQuoteData } = require('./marketController');
-const { getCompanyInfo } = require('../data/companyInfo');
+const Stock = require('../models/Stock');
+const { fetchQuoteData, fetchBatchQuotesByTokens } = require('./marketController');
+const { findToken } = require('../utils/instrumentMaster');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const { fetchBatchQuotesByTokens } = require('./marketController');
-const { findToken } = require('../utils/instrumentMaster');
 
 // @desc    Get all watchlist items for the logged-in user, enriched with live price
 // @route   GET /api/watchlist
@@ -46,14 +44,22 @@ const getWatchlist = async (req, res) => {
       quoteMap.set(q.symbol, q);
     }
 
+    // Query company info from MongoDB
+    const symbols = items.map((i) => i.symbol);
+    const dbStocks = await Stock.find({ symbol: { $in: symbols } }).lean();
+    const stockMap = new Map();
+    for (const s of dbStocks) {
+      stockMap.set(s.symbol, s);
+    }
+
     const enriched = items.map((item) => {
       const quote = quoteMap.get(item.symbol);
-      const info = getCompanyInfo(item.symbol);
+      const stockDoc = stockMap.get(item.symbol);
 
       return {
         _id: item._id,
         symbol: item.symbol,
-        companyName: item.companyName || info.name,
+        companyName: item.companyName || (stockDoc ? stockDoc.name : item.symbol.replace('-EQ', '')),
         exchange: item.exchange,
         currentPrice: quote ? quote.price : null,
         changePercent: quote ? quote.changePercent : null,

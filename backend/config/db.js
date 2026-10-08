@@ -13,6 +13,8 @@ const connectDB = async () => {
       serverSelectionTimeoutMS: 5000,
     });
     console.log(`MongoDB Connected: ${conn.connection.host}`);
+    const { seedStocksIfEmpty } = require('../utils/stockDbService');
+    await seedStocksIfEmpty();
     return conn;
   } catch (error) {
     console.error(`MongoDB connection error: ${error.message}`);

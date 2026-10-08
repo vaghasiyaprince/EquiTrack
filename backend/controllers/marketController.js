@@ -2,7 +2,7 @@ const axios = require('axios');
 const https = require('https');
 const { getAngelSession } = require('../utils/angelClient');
 const { findToken } = require('../utils/instrumentMaster');
-const { CURATED_SYMBOLS } = require('../data/curatedSymbols');
+const { getCuratedStocksFromDb } = require('../utils/stockDbService');
 
 const agent = new https.Agent({ keepAlive: false });
 
@@ -128,8 +128,8 @@ const getQuote = async (req, res) => {
 // @access  Private
 const getGainersLosers = async (req, res) => {
   try {
-    // Resolve tokens concurrently or in fast batches to drastically reduce delay
-    const tokenPromises = CURATED_SYMBOLS.map((symbol) => findToken(symbol, 'NSE'));
+    const curated = await getCuratedStocksFromDb();
+    const tokenPromises = curated.map((c) => c.token || findToken(c.symbol, c.exchange || 'NSE'));
     const tokens = (await Promise.all(tokenPromises)).filter(Boolean);
 
     if (tokens.length === 0) {
